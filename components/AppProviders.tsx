@@ -16,7 +16,7 @@ export function AppProviders({
   return (
     <MantineProvider
       theme={theme}
-      forceColorScheme="dark"
+      defaultColorScheme="dark"
       cssVariablesResolver={cssVariablesResolver}
     >
       <Notifications position="top-right" />

@@ -3,7 +3,27 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: calc(72ch + 2 * var(--mantine-spacing-md));
+  margin-inline: auto;
   padding: var(--mantine-spacing-md);
+}
+
+.stats {
+  opacity: 0.4;
+  transition: opacity 180ms ease;
+}
+
+.stats[data-live] {
+  opacity: 1;
+}
+
+.statValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1;
+  min-width: 3ch;
 }
 
 .stage {
@@ -11,14 +31,15 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  max-width: 72ch;
+  width: 100%;
 }
 
 .passage {
   font-family: var(--mantine-font-family-monospace);
   font-size: clamp(1.05rem, 2.5vw, 1.4rem);
-  line-height: 1.75;
+  line-height: 1.85;
   cursor: text;
+  transition: opacity 160ms ease;
 }
 
 .blurred {
@@ -26,36 +47,49 @@
 }
 
 .line {
-  min-height: 1.75em;
+  min-height: 1.85em;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .char {
-  color: #e8e8f0;
+  color: var(--char-pending);
+  white-space: pre;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
 .correct {
-  color: #6d6d82;
+  color: var(--char-correct);
 }
 
 .newline:not(.correct):not(.mistake) {
-  color: #b026ff;
+  color: var(--char-newline);
 }
 
-.caret {
-  border-bottom: 2px solid #00f0ff;
-  animation: caretBlink 1s steps(1) infinite;
+.caretMark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--char-caret);
+  pointer-events: none;
+  z-index: 1;
+  will-change: transform;
+  transition: transform 80ms ease-out;
 }
 
 .mistake {
-  background: #ff003c;
-  color: #ffffff;
+  display: inline-block;
+  background: var(--char-mistake);
+  color: var(--char-mistake-text);
+  border-radius: 2px;
+  animation: shake 160ms ease;
 }
 
 .hint {
   margin-top: 12px;
-  color: #00f0ff;
+  color: var(--char-caret);
   font-size: 0.85rem;
 }
 
@@ -69,14 +103,30 @@
   font-size: 16px;
 }
 
-@keyframes caretBlink {
-  50% {
-    border-bottom-color: transparent;
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-2px);
+  }
+
+  75% {
+    transform: translateX(2px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .caret {
+  .char,
+  .passage,
+  .stats,
+  .caretMark {
+    transition: none;
+  }
+
+  .mistake {
     animation: none;
   }
 }

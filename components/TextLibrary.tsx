@@ -1,15 +1,28 @@
 "use client";
 
-import { ActionIcon, Box, Group, ScrollArea, Text, UnstyledButton } from "@mantine/core";
+import {
+  ActionIcon,
+  Box,
+  Button,
+  Group,
+  ScrollArea,
+  Stack,
+  Text,
+  ThemeIcon,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
 import {
   IconCopy,
   IconFileImport,
   IconLogout,
+  IconNotes,
   IconPencil,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react";
 import type { TextItem } from "../hooks/useTexts";
+import { Shortcut } from "./Shortcut";
 import classes from "./TextLibrary.module.css";
 
 type TextLibraryProps = {
@@ -45,13 +58,12 @@ export function TextLibrary({
     <Box h="100%" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
       <Group
         justify="space-between"
-        p="sm"
+        px="sm"
+        py="sm"
         wrap="nowrap"
-        style={{ borderBottom: "1px solid #2a2a38", flexShrink: 0 }}
+        style={{ borderBottom: "1px solid var(--app-border)", flexShrink: 0 }}
       >
-        <Text fw={600} c="cyan">
-          Texts
-        </Text>
+        <Text fw={600}>Texts</Text>
         <Group gap={4} wrap="nowrap">
           <ActionIcon
             aria-label="Import text"
@@ -61,14 +73,16 @@ export function TextLibrary({
           >
             <IconFileImport size={16} />
           </ActionIcon>
-          <ActionIcon
-            aria-label="New text"
-            variant="outline"
-            color="cyan"
-            onClick={onCreate}
-          >
-            <IconPlus size={16} />
-          </ActionIcon>
+          <Tooltip label={<Shortcut keys={["mod", "N"]} />} openDelay={400}>
+            <ActionIcon
+              aria-label="New text"
+              variant="outline"
+              color="cyan"
+              onClick={onCreate}
+            >
+              <IconPlus size={16} />
+            </ActionIcon>
+          </Tooltip>
           <ActionIcon
             aria-label="Log out"
             variant="subtle"
@@ -81,9 +95,20 @@ export function TextLibrary({
       </Group>
       <ScrollArea style={{ flex: 1 }} type="auto" offsetScrollbars>
         {texts.length === 0 ? (
-          <Text p="md" c="dimmed" size="sm">
-            No texts yet.
-          </Text>
+          <Stack align="center" gap="xs" p="md" mt="lg">
+            <ThemeIcon variant="light" color="cyan" size={46} radius="xl">
+              <IconNotes size={22} stroke={1.5} />
+            </ThemeIcon>
+            <Text size="sm" fw={600}>
+              No texts yet
+            </Text>
+            <Text size="xs" c="dimmed" ta="center">
+              Save a passage to start a test.
+            </Text>
+            <Button size="xs" mt={4} onClick={onCreate}>
+              New text
+            </Button>
+          </Stack>
         ) : (
           texts.map((item) => {
             const selected = item.id === selectedId;

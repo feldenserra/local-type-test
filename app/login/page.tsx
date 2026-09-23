@@ -3,13 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Box,
   Button,
   Center,
+  Group,
+  Paper,
   PasswordInput,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
+import { ColorSchemeToggle } from "../../components/ColorSchemeToggle";
 
 const AUTH_COOKIE = "auth-token=1; Path=/; Max-Age=2592000; SameSite=Lax";
 
@@ -51,41 +55,55 @@ export default function LoginPage() {
   }
 
   return (
-    <Center mih="100dvh" px="md">
-      <Stack w="100%" maw={360} gap="md">
-        <div>
-          <Title order={2} c="cyan">
-            Type
-          </Title>
-          <Text c="dimmed" size="sm">
-            Enter the app password.
-          </Text>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
+    <Box mih="100dvh" bg="var(--app-bg)">
+      <Group justify="flex-end" p="sm">
+        <ColorSchemeToggle />
+      </Group>
+      <Center mih="calc(100dvh - 52px)" px="md" pb="xl">
+        <Paper
+          withBorder
+          p="xl"
+          radius="md"
+          w="100%"
+          maw={400}
+          style={{ background: "var(--app-surface)", borderColor: "var(--app-border)" }}
         >
-          <Stack gap="sm">
-            <PasswordInput
-              label="Password"
-              name="password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.currentTarget.value);
-                setError(null);
+          <Stack gap="md">
+            <div>
+              <Title order={2} c="cyan">
+                Type
+              </Title>
+              <Text c="dimmed" size="sm" mt={4}>
+                Enter the app password.
+              </Text>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit();
               }}
-              error={error}
-              autoFocus
-              autoComplete="current-password"
-            />
-            <Button type="submit" fullWidth loading={loading}>
-              Continue
-            </Button>
+            >
+              <Stack gap="sm">
+                <PasswordInput
+                  label="Password"
+                  name="password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.currentTarget.value);
+                    setError(null);
+                  }}
+                  error={error}
+                  autoFocus
+                  autoComplete="current-password"
+                />
+                <Button type="submit" fullWidth loading={loading}>
+                  Continue
+                </Button>
+              </Stack>
+            </form>
           </Stack>
-        </form>
-      </Stack>
-    </Center>
+        </Paper>
+      </Center>
+    </Box>
   );
 }
