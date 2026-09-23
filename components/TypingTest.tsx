@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -15,6 +16,7 @@ import {
   Group,
   Modal,
   Stack,
+  Switch,
   Text,
   Tooltip,
   Transition,
@@ -40,11 +42,19 @@ type Engine = {
   finishedAt: number | null;
   keystrokes: number;
   mistakes: number;
+  wrong: boolean[];
+  locked: boolean;
+};
+
+type WordSpan = {
+  start: number;
+  end: number;
 };
 
 type Action =
   | { type: "char"; char: string }
-  | { type: "backspace" };
+  | { type: "backspace" }
+  | { type: "backspaceWord" };
 
 type CaretBox = {
   x: number;
@@ -60,41 +70,136 @@ function createEngine(): Engine {
     finishedAt: null,
     keystrokes: 0,
     mistakes: 0,
+    wrong: [],
+    locked: false,
   };
 }
 
-function reduce(state: Engine, action: Action, chars: string[]): Engine {
+function isSeparator(ch: string) {
+  return ch === " " || ch === "\n" || ch === "\t";
+}
+
+function wordSpans(chars: string[]): (WordSpan | null)[] {
+  const spans: (WordSpan | null)[] = new Array(chars.length).fill(null);
+  let i = 0;
+  while (i < chars.length) {
+    if (isSeparator(chars[i])) {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (i < chars.length && !isSeparator(chars[i])) {
+      i += 1;
+    }
+    const span = { start, end: i - 1 };
+    for (let j = start; j < i; j += 1) {
+      spans[j] = span;
+    }
+  }
+  return spans;
+}
+
+function wordSpanAt(chars: string[], index: number): WordSpan | null {
+  if (index < 0 || index >= chars.length || isSeparator(chars[index])) {
+    return null;
+  }
+  let start = index;
+  while (start > 0 && !isSeparator(chars[start - 1])) {start -= 1;}
+  let end = index;
+  while (end + 1 < chars.length && !isSeparator(chars[end + 1])) {end += 1;}
+  return { start, end };
+}
+
+function wordFails(wrong: boolean[], span: WordSpan) {
+  let bad = 0;
+  for (let i = span.start; i <= span.end; i += 1) {
+    if (wrong[i]) {bad += 1;}
+  }
+  return bad * 5 > span.end - span.start + 1;
+}
+
+function backspaceLimit(chars: string[], state: Engine) {
+  if (state.locked) {
+    const span = wordSpanAt(chars, state.index - 1);
+    return span ? span.start : state.index;
+  }
+  if (state.index >= chars.length || isSeparator(chars[state.index])) {
+    return state.index;
+  }
+  const span = wordSpanAt(chars, state.index);
+  return span ? span.start : state.index;
+}
+
+function rewindTo(state: Engine, index: number): Engine {
+  if (index === state.index && !state.mistake && !state.locked) {return state;}
+  const wrong = state.wrong.slice();
+  for (let i = index; i < state.index; i += 1) {
+    wrong[i] = false;
+  }
+  return { ...state, index, wrong, locked: false, mistake: false };
+}
+
+function reduce(
+  state: Engine,
+  action: Action,
+  chars: string[],
+  hideMode: boolean,
+): Engine {
   if (state.finishedAt !== null) {return state;}
 
-  if (action.type === "backspace") {
-    if (state.mistake) {return { ...state, mistake: false };}
-    if (state.index > 0) {return { ...state, index: state.index - 1 };}
-    return state;
+  if (action.type === "backspace" || action.type === "backspaceWord") {
+    if (action.type === "backspace" && state.mistake) {
+      return { ...state, mistake: false };
+    }
+    const limit = backspaceLimit(chars, state);
+    const index =
+      action.type === "backspaceWord" ? limit : Math.max(state.index - 1, limit);
+    return rewindTo(state, index);
   }
 
-  if (state.mistake || state.index >= chars.length) {return state;}
+  if (state.mistake || state.locked || state.index >= chars.length) {return state;}
 
   const now = Date.now();
   const startedAt = state.startedAt ?? now;
   const keystrokes = state.keystrokes + 1;
+  const expected = chars[state.index];
 
-  if (action.char === chars[state.index]) {
-    const index = state.index + 1;
+  if (!hideMode || isSeparator(expected)) {
+    if (action.char === expected) {
+      const index = state.index + 1;
+      return {
+        ...state,
+        index,
+        startedAt,
+        keystrokes,
+        finishedAt: index === chars.length ? now : null,
+      };
+    }
     return {
       ...state,
-      index,
+      mistake: true,
       startedAt,
       keystrokes,
-      finishedAt: index === chars.length ? now : null,
+      mistakes: state.mistakes + 1,
     };
   }
 
+  const match = action.char === expected;
+  const wrong = state.wrong.slice();
+  wrong[state.index] = !match;
+  const index = state.index + 1;
+  const span = wordSpanAt(chars, state.index);
+  const locked = span !== null && index === span.end + 1 && wordFails(wrong, span);
+
   return {
     ...state,
-    mistake: true,
+    index,
+    wrong,
+    locked,
     startedAt,
     keystrokes,
-    mistakes: state.mistakes + 1,
+    mistakes: state.mistakes + (match ? 0 : 1),
+    finishedAt: locked || index !== chars.length ? null : now,
   };
 }
 
@@ -146,6 +251,7 @@ export function TypingTest({
   charsRef.current = chars;
 
   const [engine, setEngine] = useState<Engine>(createEngine);
+  const [hideMode, setHideMode] = useState(false);
   const [focused, setFocused] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [caretBox, setCaretBox] = useState<CaretBox | null>(null);
@@ -155,23 +261,41 @@ export function TypingTest({
   const stageRef = useRef<HTMLDivElement>(null);
   const passageRef = useRef<HTMLDivElement>(null);
   const handledByKeydown = useRef(false);
+  const hideModeRef = useRef(hideMode);
+  hideModeRef.current = hideMode;
+  const spans = useMemo(() => wordSpans(Array.from(content)), [content]);
 
   const applyChars = useCallback((input: string) => {
     const pieces = Array.from(input);
     setEngine((current) => {
       let next = current;
       for (const char of pieces) {
-        next = reduce(next, { type: "char", char }, charsRef.current);
+        next = reduce(next, { type: "char", char }, charsRef.current, hideModeRef.current);
       }
       return next;
     });
   }, []);
 
   const applyBackspace = useCallback(() => {
-    setEngine((current) => reduce(current, { type: "backspace" }, charsRef.current));
+    setEngine((current) =>
+      reduce(current, { type: "backspace" }, charsRef.current, hideModeRef.current),
+    );
+  }, []);
+
+  const applyBackspaceWord = useCallback(() => {
+    setEngine((current) =>
+      reduce(current, { type: "backspaceWord" }, charsRef.current, hideModeRef.current),
+    );
   }, []);
 
   const restart = useCallback(() => {
+    setEngine(createEngine());
+    setNow(Date.now());
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const toggleHide = useCallback((next: boolean) => {
+    setHideMode(next);
     setEngine(createEngine());
     setNow(Date.now());
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -257,12 +381,18 @@ export function TypingTest({
     observer.observe(stage);
     if (passageRef.current) {observer.observe(passageRef.current);}
     return () => observer.disconnect();
-  }, [engine.index, engine.mistake, finished, content]);
+  }, [engine.index, engine.mistake, engine.locked, finished, content]);
 
   useWindowEvent("keydown", (event) => {
     if (!active) {return;}
     if (event.repeat || event.isComposing) {return;}
-    if (event.metaKey || event.ctrlKey || event.altKey) {return;}
+    const deleteWord =
+      event.key === "Backspace" &&
+      event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey;
+    if ((event.metaKey || event.ctrlKey || event.altKey) && !deleteWord) {return;}
     if (!isTypingTarget(event.target, inputRef.current)) {return;}
 
     const done = engine.finishedAt !== null;
@@ -289,7 +419,8 @@ export function TypingTest({
     if (event.key === "Backspace") {
       event.preventDefault();
       markKeydown();
-      applyBackspace();
+      if (deleteWord) {applyBackspaceWord();}
+      else {applyBackspace();}
       return;
     }
 
@@ -347,6 +478,10 @@ export function TypingTest({
     if (handledByKeydown.current) {return;}
     const native = event.nativeEvent;
     if (!(native instanceof InputEvent)) {return;}
+    if (native.inputType === "deleteWordBackward") {
+      applyBackspaceWord();
+      return;
+    }
     if (native.inputType === "deleteContentBackward") {
       applyBackspace();
       return;
@@ -419,16 +554,24 @@ export function TypingTest({
             {title}
           </Text>
         </Group>
-        <Tooltip label={<Shortcut keys={["mod", "Enter"]} />} openDelay={400}>
-          <ActionIcon
-            aria-label="Restart"
-            variant="subtle"
-            color="cyan"
-            onClick={restart}
-          >
-            <IconRefresh size={18} />
-          </ActionIcon>
-        </Tooltip>
+        <Group gap="sm" wrap="nowrap">
+          <Switch
+            size="sm"
+            label="Hide"
+            checked={hideMode}
+            onChange={(event) => toggleHide(event.currentTarget.checked)}
+          />
+          <Tooltip label={<Shortcut keys={["mod", "Enter"]} />} openDelay={400}>
+            <ActionIcon
+              aria-label="Restart"
+              variant="subtle"
+              color="cyan"
+              onClick={restart}
+            >
+              <IconRefresh size={18} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
 
       <Group
@@ -500,34 +643,72 @@ export function TypingTest({
             focused || finished ? "" : classes.blurred,
           ].filter(Boolean).join(" ")}
         >
-          {lines.map((line, lineIndex) => (
+          {lines.map((line, lineIndex) => {
+            const showEndCaret =
+              hideMode &&
+              engine.locked &&
+              engine.index === chars.length &&
+              !finished &&
+              lineIndex === lines.length - 1;
+            const lineHasCaret =
+              showEndCaret || line.some(({ i }) => i === engine.index && !finished);
+            const lineHasVisible = line.some(({ i }) => {
+              const span = spans[i];
+              if (!hideMode) {return true;}
+              if (span !== null) {return engine.index > span.end;}
+              return i <= engine.index;
+            });
+            if (hideMode && !lineHasCaret && !lineHasVisible) {return null;}
+
+            return (
             <div key={line[0]?.i ?? lineIndex} className={classes.line}>
               {line.map(({ ch, i }) => {
-                const isCorrect = i < engine.index;
+                const span = spans[i];
+                const concealed =
+                  hideMode && span !== null && engine.index <= span.end;
+                const futureSeparator = hideMode && span === null && i > engine.index;
+                const hidden = concealed || futureSeparator;
+                const failed =
+                  hideMode &&
+                  engine.locked &&
+                  span !== null &&
+                  engine.index === span.end + 1 &&
+                  engine.wrong[i] === true;
+                const isCorrect = i < engine.index && !failed;
                 const isCurrent = i === engine.index && !finished;
-                const isMistake = isCurrent && engine.mistake;
+                const isMistake = failed || (isCurrent && engine.mistake);
                 const className = [
                   classes.char,
                   ch === "\n" ? classes.newline : "",
                   isCorrect ? classes.correct : "",
                   isMistake ? classes.mistake : "",
+                  hidden ? classes.concealed : "",
                 ]
                   .filter(Boolean)
                   .join(" ");
 
                 return (
-                  <span
-                    key={i}
-                    ref={isCurrent ? caretRef : undefined}
-                    className={className}
-                    data-mistake={isMistake ? "true" : undefined}
-                  >
-                    {ch === "\n" ? "↵" : ch}
+                  <span key={i}>
+                    {isCurrent && hidden ? (
+                      <span ref={caretRef} className={classes.caretAnchor} />
+                    ) : null}
+                    <span
+                      ref={isCurrent && !hidden ? caretRef : undefined}
+                      className={className}
+                      data-mistake={isMistake ? "true" : undefined}
+                      aria-hidden={hidden ? true : undefined}
+                    >
+                      {hidden ? "" : ch === "\n" ? "↵" : ch}
+                    </span>
                   </span>
                 );
               })}
+              {showEndCaret ? (
+                <span ref={caretRef} className={classes.caretAnchor} />
+              ) : null}
             </div>
-          ))}
+            );
+          })}
         </div>
         <Transition mounted={!focused && !finished} transition="fade" duration={160}>
           {(styles) => (
@@ -539,8 +720,9 @@ export function TypingTest({
       </Box>
 
       <Text hiddenFrom="sm" size="xs" c="dimmed" mt="sm">
-        Tap the passage to open the keyboard. Correct mistakes with Backspace
-        before continuing.
+        {hideMode
+          ? "Tap the passage to open the keyboard. A word stays hidden until its last letter. More than 20% wrong must be backspaced and retyped."
+          : "Tap the passage to open the keyboard. Correct mistakes with Backspace before continuing."}
       </Text>
 
       <Modal

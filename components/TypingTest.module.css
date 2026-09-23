@@ -87,6 +87,24 @@
   animation: shake 160ms ease;
 }
 
+.concealed {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 0;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.caretAnchor {
+  display: inline-block;
+  width: 0;
+  height: 1.85em;
+  vertical-align: bottom;
+}
+
 .hint {
   margin-top: 12px;
   color: var(--char-caret);
