@@ -25,7 +25,10 @@ function isTextItem(value: unknown): value is TextItem {
 }
 
 function normalizeContent(content: string) {
-  return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+$/gm, "");
 }
 
 function readTexts(key: string): TextItem[] {
