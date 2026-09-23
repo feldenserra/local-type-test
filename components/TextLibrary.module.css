@@ -1,0 +1,22 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 10px;
+  border-left: 2px solid transparent;
+}
+
+.row:hover {
+  background: #17171f;
+}
+
+.active {
+  border-left-color: #00f0ff;
+  background: #17171f;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}

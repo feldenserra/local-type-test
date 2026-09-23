@@ -1,0 +1,82 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: var(--mantine-spacing-md);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  max-width: 72ch;
+}
+
+.passage {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: clamp(1.05rem, 2.5vw, 1.4rem);
+  line-height: 1.75;
+  cursor: text;
+}
+
+.blurred {
+  opacity: 0.4;
+}
+
+.line {
+  min-height: 1.75em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.char {
+  color: #e8e8f0;
+}
+
+.correct {
+  color: #6d6d82;
+}
+
+.newline:not(.correct):not(.mistake) {
+  color: #b026ff;
+}
+
+.caret {
+  border-bottom: 2px solid #00f0ff;
+  animation: caretBlink 1s steps(1) infinite;
+}
+
+.mistake {
+  background: #ff003c;
+  color: #ffffff;
+}
+
+.hint {
+  margin-top: 12px;
+  color: #00f0ff;
+  font-size: 0.85rem;
+}
+
+.capture {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+@keyframes caretBlink {
+  50% {
+    border-bottom-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
+}
